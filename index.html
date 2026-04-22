@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turkey as a Transit Country — Migration Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --border: #1e2d45;
+    --accent: #e85d26;
+    --accent2: #f5a623;
+    --text: #e8e0d5;
+    --muted: #6b7a99;
+    --turkey: #e85d26;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 2.5rem 3rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+
+  .header-left h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.2rem, 5vw, 4rem);
+    letter-spacing: 0.04em;
+    line-height: 0.95;
+    color: var(--text);
+  }
+
+  .header-left h1 span {
+    color: var(--accent);
+  }
+
+  .header-left p {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    max-width: 480px;
+    line-height: 1.6;
+  }
+
+  .stat-pills {
+    display: flex;
+    gap: 1rem;
+    flex-shrink: 0;
+  }
+
+  .pill {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.7rem 1.2rem;
+    text-align: center;
+  }
+
+  .pill .num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .pill .label {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 0.2rem;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    height: calc(100vh - 140px);
+    min-height: 500px;
+  }
+
+  .map-section {
+    position: relative;
+    overflow: hidden;
+  }
+
+  #map-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .country-path {
+    stroke: #1a2540;
+    stroke-width: 0.4px;
+    transition: opacity 0.15s;
+    cursor: pointer;
+  }
+
+  .country-path:hover {
+    opacity: 0.8;
+    stroke: var(--accent2);
+    stroke-width: 1.2px;
+  }
+
+  .country-path.turkey-highlight {
+    fill: var(--turkey) !important;
+    stroke: #fff;
+    stroke-width: 1.2px;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    background: #0f1826;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    min-width: 180px;
+    border-radius: 2px;
+  }
+
+  .tooltip.visible { opacity: 1; }
+
+  .tooltip .tt-country {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    color: var(--text);
+    letter-spacing: 0.05em;
+  }
+
+  .tooltip .tt-value {
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--accent);
+    margin-top: 0.2rem;
+  }
+
+  .tooltip .tt-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 1.2rem 1.4rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-header h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  .sidebar-header .year-display {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.8rem;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .top-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.6rem 0;
+  }
+
+  .top-list::-webkit-scrollbar { width: 4px; }
+  .top-list::-webkit-scrollbar-track { background: var(--bg); }
+  .top-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .list-item {
+    padding: 0.5rem 1.4rem;
+    display: grid;
+    grid-template-columns: 1.2rem 1fr auto;
+    align-items: center;
+    gap: 0.6rem;
+    border-bottom: 1px solid rgba(30,45,69,0.5);
+  }
+
+  .list-item .rank {
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .list-item .name {
+    font-size: 0.8rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .list-item .val {
+    font-size: 0.75rem;
+    color: var(--accent2);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .list-item .bar-wrap {
+    grid-column: 2 / 4;
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    margin-top: 2px;
+  }
+
+  .list-item .bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 1px;
+    transition: width 0.4s ease;
+  }
+
+  /* Slider controls */
+  .controls {
+    padding: 1.2rem 1.4rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .play-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .play-btn:hover { background: #d04d1a; transform: scale(1.08); }
+
+  .play-btn svg { width: 12px; height: 12px; fill: white; }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+  }
+
+  .year-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* Legend */
+  .legend {
+    padding: 0 3rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .legend-gradient {
+    width: 120px;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(to right, #0d2137, #1a4a6e, #2878b5, #e85d26, #ff2200);
+  }
+
+  .source-note {
+    padding: 0.4rem 3rem;
+    font-size: 0.6rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Turkey as a <span>Transit Country</span></h1>
+    <p>Refugees hosted in Turkey by country of origin, 2011–2024. Data source: UNHCR Statistical Database via UNdata.</p>
+  </div>
+  <div class="stat-pills">
+    <div class="pill">
+      <div class="num" id="stat-peak">3.7M</div>
+      <div class="label">Peak (2021)</div>
+    </div>
+    <div class="pill">
+      <div class="num" id="stat-current">2.9M</div>
+      <div class="label">2024 Total</div>
+    </div>
+    <div class="pill">
+      <div class="num">46</div>
+      <div class="label">Origin Countries</div>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="map-section">
+    <svg id="map-svg"></svg>
+    <div class="tooltip" id="tooltip">
+      <div class="tt-country" id="tt-country">—</div>
+      <div class="tt-value" id="tt-value">0</div>
+      <div class="tt-label">refugees in Turkey</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h3>Top Origins</h3>
+      <div class="year-display" id="sidebar-year">2011</div>
+    </div>
+    <div class="top-list" id="top-list"></div>
+    <div class="controls">
+      <div class="slider-row">
+        <button class="play-btn" id="play-btn">
+          <svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9"/></svg>
+        </button>
+        <input type="range" id="year-slider" min="2011" max="2024" value="2011" step="1">
+      </div>
+      <div class="year-labels">
+        <span>2011</span><span>2014</span><span>2017</span><span>2020</span><span>2024</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span>0</span>
+  <div class="legend-gradient"></div>
+  <span>3M+ refugees</span>
+  &nbsp;|&nbsp;
+  <span style="color:var(--accent)">■</span> Turkey (destination)
+</div>
+<div class="source-note">Source: UNHCR Statistical Database — UNdata (2026) · Visualization: Migration Analysis Project</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const rawData = [
+  ["Afghanistan",2682,3517,3926,4188,3846,3423,5603,6606,1192,4219,7647,10581,12549,14145],
+  ["Algeria",0,0,0,5,5,5,5,5,0,0,0,0,0,0],
+  ["Angola",0,0,0,0,0,0,5,5,0,0,0,0,0,0],
+  ["Azerbaijan",0,5,0,5,5,5,5,5,0,0,0,0,0,0],
+  ["Burundi",0,0,0,5,0,0,6,5,0,0,0,0,0,0],
+  ["Cameroon",6,6,7,9,8,11,11,6,0,0,0,0,0,0],
+  ["China",5,5,16,16,14,13,13,13,0,0,0,0,0,0],
+  ["Republic of Congo",0,0,0,0,10,9,5,6,6,0,0,0,0,0],
+  ["Egypt",14,13,17,22,30,51,51,59,0,0,0,0,0,0],
+  ["Eritrea",57,49,47,59,82,78,75,64,0,0,0,0,0,0],
+  ["Ethiopia",51,74,93,98,92,92,95,73,0,0,0,0,0,0],
+  ["Guinea",7,8,6,8,7,8,12,10,0,0,0,0,0,0],
+  ["Iran",2993,3040,3321,3388,5262,6966,8308,8731,548,1693,3942,5114,5388,6072],
+  ["Iraq",7071,9478,13467,17542,24135,30398,37319,39088,1279,4565,9258,11855,12909,14070],
+  ["Jordan",5,8,18,27,26,32,35,36,0,0,0,0,0,0],
+  ["Kyrgyzstan",0,163,211,204,204,201,190,175,0,0,0,0,0,0],
+  ["Lebanon",0,6,5,7,7,13,13,13,0,0,0,0,0,0],
+  ["Liberia",5,5,5,6,5,5,5,5,0,0,0,0,0,0],
+  ["Libya",0,0,0,10,20,23,23,27,0,0,0,0,0,0],
+  ["Mali",0,0,0,6,0,0,0,0,0,0,0,0,0,0],
+  ["Mauritania",5,5,5,6,7,8,8,8,0,0,0,0,0,0],
+  ["Morocco",12,9,11,25,32,31,31,33,0,0,0,0,0,0],
+  ["Nigeria",5,5,5,6,8,10,11,10,0,0,0,0,0,0],
+  ["Pakistan",14,19,26,28,41,50,56,51,0,0,0,0,0,0],
+  ["Philippines",0,0,0,0,0,5,5,5,0,0,0,0,0,0],
+  ["Russian Federation",5,5,5,5,5,5,5,5,0,0,0,0,0,0],
+  ["Saudi Arabia",0,5,5,0,0,5,5,5,0,0,0,0,0,0],
+  ["Senegal",0,0,0,0,5,5,5,5,0,0,0,0,0,0],
+  ["Sierra Leone",0,0,5,5,5,5,5,5,0,0,0,0,0,0],
+  ["Somalia",1105,1669,2153,2389,2364,2239,2219,2220,0,0,0,0,0,0],
+  ["South Sudan",0,0,0,0,5,5,5,5,0,0,0,0,0,0],
+  ["Sri Lanka",20,19,15,15,14,12,15,15,0,0,0,0,0,0],
+  ["State of Palestine",90,146,588,849,906,1043,1147,1226,0,0,0,0,0,0],
+  ["Stateless",20,18,15,61,94,81,206,208,0,0,0,0,0,0],
+  ["Sudan",157,179,174,218,262,269,274,266,0,0,0,0,0,0],
+  ["Syria",19,248466,585601,1557899,2503549,2823987,3424237,3622366,3576370,3641370,3737369,3535898,3214780,2901478],
+  ["Tajikistan",0,0,12,17,14,8,8,8,0,0,0,0,0,0],
+  ["Togo",0,5,5,5,5,5,0,0,0,0,0,0,0,0],
+  ["Tunisia",5,5,8,9,8,9,14,13,0,0,0,0,0,0],
+  ["Turkmenistan",0,5,0,0,5,5,6,6,0,0,0,0,0,0],
+  ["Uganda",5,5,7,23,22,23,24,15,0,0,0,0,0,0],
+  ["Ukraine",0,0,0,0,0,0,0,0,0,0,0,2768,3232,2616],
+  ["United Arab Emirates",0,0,0,0,0,0,6,6,0,0,0,0,0,0],
+  ["Uzbekistan",46,56,57,65,66,50,51,45,0,0,0,0,0,0],
+  ["Yemen",7,17,34,40,101,156,161,169,0,0,0,0,0,0],
+  ["Zimbabwe",0,0,0,0,0,0,0,6,0,0,0,0,0,0],
+];
+
+const YEARS = d3.range(2011, 2025);
+
+// Build lookup: countryName → {year: value}
+const dataMap = {};
+rawData.forEach(row => {
+  const name = row[0];
+  dataMap[name] = {};
+  YEARS.forEach((y, i) => { dataMap[name][y] = row[i + 1]; });
+});
+
+function getVal(name, year) {
+  if (!dataMap[name]) return 0;
+  return dataMap[name][year] || 0;
+}
+
+// Name aliases for TopoJSON world map
+const nameAliases = {
+  "Russian Federation": "Russia",
+  "Republic of Congo": "Republic of the Congo",
+  "State of Palestine": "Palestine",
+  "Syrian Arab Republic": "Syria",
+  "Iran (Islamic Republic of)": "Iran",
+  "Democratic Republic of the Congo": "Dem. Rep. Congo",
+};
+
+function normalizeName(n) {
+  return nameAliases[n] || n;
+}
+
+// ── MAP ───────────────────────────────────────────────────────────────────────
+const svg = d3.select("#map-svg");
+const mapSection = document.querySelector(".map-section");
+
+let width, height, projection, path, geoData;
+let currentYear = 2011;
+let playing = false;
+let playInterval = null;
+
+const colorScale = d3.scaleSequentialLog()
+  .domain([1, 3800000])
+  .clamp(true)
+  .interpolator(d3.interpolateRgbBasis(["#0d2137","#1a4a6e","#2878b5","#e85d26","#ff2200"]));
+
+function fmt(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(2) + "M";
+  if (n >= 1000) return (n/1000).toFixed(1) + "K";
+  return n.toString();
+}
+
+function initMap() {
+  width = mapSection.clientWidth;
+  height = mapSection.clientHeight;
+
+  svg.attr("width", width).attr("height", height);
+
+  projection = d3.geoNaturalEarth1()
+    .scale(width / 4.2)
+    .translate([width / 2, height / 1.75]);
+
+  path = d3.geoPath().projection(projection);
+
+  fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+    .then(r => r.json())
+    .then(world => {
+      geoData = topojson.feature(world, world.objects.countries);
+
+      // Country name lookup from numeric ID — we use a second endpoint
+      fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+        .then(() => {}) // already have it
+
+      // Use restcountries for name mapping — instead embed a minimal id→name map
+      // We'll use a small embedded lookup
+      drawMap();
+    });
+}
+
+// Minimal ISO numeric → country name (only what we need)
+const idToName = {
+  "004":"Afghanistan","008":"Albania","012":"Algeria","024":"Angola","051":"Armenia",
+  "036":"Australia","040":"Austria","031":"Azerbaijan","050":"Bangladesh","056":"Belgium",
+  "064":"Bhutan","068":"Bolivia","070":"Bosnia and Herz.","072":"Botswana","076":"Brazil",
+  "100":"Bulgaria","104":"Myanmar","108":"Burundi","116":"Cambodia","120":"Cameroon",
+  "124":"Canada","140":"Central African Rep.","144":"Sri Lanka","152":"Chile","156":"China",
+  "170":"Colombia","178":"Republic of the Congo","180":"Dem. Rep. Congo","188":"Costa Rica",
+  "191":"Croatia","192":"Cuba","196":"Cyprus","203":"Czechia","208":"Denmark",
+  "214":"Dominican Rep.","218":"Ecuador","818":"Egypt","222":"El Salvador","232":"Eritrea",
+  "231":"Ethiopia","246":"Finland","250":"France","266":"Gabon","276":"Germany",
+  "288":"Ghana","300":"Greece","320":"Guatemala","324":"Guinea","332":"Haiti",
+  "340":"Honduras","348":"Hungary","356":"India","360":"Indonesia","364":"Iran",
+  "368":"Iraq","372":"Ireland","376":"Israel","380":"Italy","388":"Jamaica",
+  "392":"Japan","400":"Jordan","398":"Kazakhstan","404":"Kenya","410":"South Korea",
+  "414":"Kuwait","417":"Kyrgyzstan","418":"Laos","422":"Lebanon","430":"Liberia",
+  "434":"Libya","440":"Lithuania","504":"Morocco","484":"Mexico","496":"Mongolia",
+  "508":"Mozambique","516":"Namibia","524":"Nepal","528":"Netherlands","540":"New Caledonia",
+  "554":"New Zealand","558":"Nicaragua","562":"Niger","566":"Nigeria","578":"Norway",
+  "586":"Pakistan","591":"Panama","598":"Papua New Guinea","600":"Paraguay","604":"Peru",
+  "608":"Philippines","616":"Poland","620":"Portugal","630":"Puerto Rico","634":"Qatar",
+  "642":"Romania","643":"Russia","646":"Rwanda","682":"Saudi Arabia","686":"Senegal",
+  "694":"Sierra Leone","706":"Somalia","710":"South Africa","728":"South Sudan",
+  "724":"Spain","729":"Sudan","752":"Sweden","756":"Switzerland","760":"Syria",
+  "762":"Tajikistan","764":"Thailand","768":"Togo","780":"Trinidad and Tobago",
+  "788":"Tunisia","792":"Turkey","800":"Uganda","804":"Ukraine",
+  "784":"United Arab Emirates","826":"United Kingdom","840":"United States",
+  "858":"Uruguay","860":"Uzbekistan","862":"Venezuela","704":"Vietnam",
+  "887":"Yemen","894":"Zambia","716":"Zimbabwe","275":"Palestine",
+  "894":"Zambia","882":"Samoa","706":"Somalia",
+};
+
+function drawMap() {
+  svg.selectAll("*").remove();
+
+  const g = svg.append("g");
+
+  g.selectAll(".country-path")
+    .data(geoData.features)
+    .join("path")
+    .attr("class", d => {
+      const name = idToName[String(d.id).padStart(3,"0")] || "";
+      return "country-path" + (name === "Turkey" ? " turkey-highlight" : "");
+    })
+    .attr("d", path)
+    .attr("fill", d => {
+      const name = idToName[String(d.id).padStart(3,"0")] || "";
+      if (name === "Turkey") return "var(--turkey)";
+      const val = getVal(name, currentYear);
+      return val > 0 ? colorScale(val) : "#132030";
+    })
+    .on("mousemove", function(event, d) {
+      const name = idToName[String(d.id).padStart(3,"0")] || "";
+      const val = getVal(name, currentYear);
+      const tt = document.getElementById("tooltip");
+      const rect = mapSection.getBoundingClientRect();
+      let x = event.clientX - rect.left + 12;
+      let y = event.clientY - rect.top - 10;
+      if (x + 200 > width) x -= 210;
+      tt.style.left = x + "px";
+      tt.style.top = y + "px";
+      tt.classList.add("visible");
+      document.getElementById("tt-country").textContent = name === "Turkey" ? "🇹🇷 Turkey (Destination)" : (name || "Unknown");
+      document.getElementById("tt-value").textContent = name === "Turkey" ? "Hosting all refugees" : (val > 0 ? fmt(val) + " refugees" : "No data");
+    })
+    .on("mouseleave", () => {
+      document.getElementById("tooltip").classList.remove("visible");
+    });
+}
+
+function updateMap(year) {
+  currentYear = year;
+  document.getElementById("sidebar-year").textContent = year;
+  document.getElementById("year-slider").value = year;
+
+  svg.selectAll(".country-path")
+    .attr("fill", d => {
+      const name = idToName[String(d.id).padStart(3,"0")] || "";
+      if (name === "Turkey") return "var(--turkey)";
+      const val = getVal(name, year);
+      return val > 0 ? colorScale(val) : "#132030";
+    });
+
+  updateSidebar(year);
+}
+
+function updateSidebar(year) {
+  const entries = rawData
+    .map(row => ({ name: row[0], val: row[YEARS.indexOf(year) + 1] }))
+    .filter(d => d.val > 0)
+    .sort((a, b) => b.val - a.val)
+    .slice(0, 12);
+
+  const maxVal = entries[0]?.val || 1;
+  const list = document.getElementById("top-list");
+
+  list.innerHTML = entries.map((d, i) => `
+    <div class="list-item">
+      <span class="rank">${i+1}</span>
+      <span class="name">${d.name}</span>
+      <span class="val">${fmt(d.val)}</span>
+      <div class="bar-wrap" style="grid-column:2/4">
+        <div class="bar-fill" style="width:${(d.val/maxVal*100).toFixed(1)}%"></div>
+      </div>
+    </div>
+  `).join("");
+}
+
+// ── CONTROLS ──────────────────────────────────────────────────────────────────
+document.getElementById("year-slider").addEventListener("input", e => {
+  updateMap(+e.target.value);
+});
+
+const playBtn = document.getElementById("play-btn");
+const playIcon = `<svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9"/></svg>`;
+const pauseIcon = `<svg viewBox="0 0 10 10"><rect x="2" y="1" width="2.5" height="8"/><rect x="5.5" y="1" width="2.5" height="8"/></svg>`;
+
+playBtn.addEventListener("click", () => {
+  if (playing) {
+    clearInterval(playInterval);
+    playing = false;
+    playBtn.innerHTML = playIcon;
+  } else {
+    if (currentYear >= 2024) updateMap(2011);
+    playing = true;
+    playBtn.innerHTML = pauseIcon;
+    playInterval = setInterval(() => {
+      const next = currentYear + 1;
+      if (next > 2024) {
+        clearInterval(playInterval);
+        playing = false;
+        playBtn.innerHTML = playIcon;
+      } else {
+        updateMap(next);
+      }
+    }, 900);
+  }
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener("resize", () => { initMap(); updateMap(currentYear); });
+initMap();
+updateMap(2011);
+</script>
+</body>
+</html>
