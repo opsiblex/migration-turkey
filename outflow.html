@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turkish Citizens in Europe — Residence Permits</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --border: #1e2d45;
+    --accent: #3b9eff;
+    --accent2: #7dd3fc;
+    --text: #e8e0d5;
+    --muted: #6b7a99;
+    --turkey: #e85d26;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-weight: 300; min-height: 100vh; }
+
+  header {
+    padding: 2rem 3rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem;
+  }
+
+  .header-left h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2rem, 4vw, 3.4rem);
+    letter-spacing: 0.04em; line-height: 0.95;
+  }
+  .header-left h1 span { color: var(--accent); }
+  .header-left p { margin-top: 0.5rem; font-size: 0.82rem; color: var(--muted); max-width: 480px; line-height: 1.6; }
+
+  .stat-pills { display: flex; gap: 0.8rem; flex-shrink: 0; }
+  .pill { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 0.6rem 1rem; text-align: center; }
+  .pill .num { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: var(--accent); line-height: 1; }
+  .pill .label { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.2rem; }
+
+  /* Filter tabs */
+  .filter-bar {
+    padding: 0.8rem 3rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .filter-bar span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-right: 0.5rem; }
+
+  .filter-btn {
+    padding: 0.35rem 1rem;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.03em;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--accent2); }
+  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+
+  .main { display: grid; grid-template-columns: 1fr 280px; height: calc(100vh - 155px); min-height: 480px; }
+
+  .map-section { position: relative; overflow: hidden; }
+  #map-svg { width: 100%; height: 100%; }
+
+  .country-path { stroke: #1a2540; stroke-width: 0.5px; transition: opacity 0.15s; cursor: pointer; }
+  .country-path:hover { opacity: 0.75; stroke: var(--accent2); stroke-width: 1.2px; }
+  .country-path.turkey-dot { fill: var(--turkey) !important; stroke: #fff; stroke-width: 1.2px; }
+
+  .tooltip {
+    position: absolute; background: #0f1826;
+    border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem; pointer-events: none; opacity: 0;
+    transition: opacity 0.15s; min-width: 190px; border-radius: 2px;
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .tt-country { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 0.05em; }
+  .tooltip .tt-total { font-size: 1.3rem; font-weight: 500; color: var(--accent); margin-top: 0.2rem; }
+  .tooltip .tt-breakdown { margin-top: 0.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem 0.8rem; }
+  .tooltip .tt-row { font-size: 0.68rem; color: var(--muted); }
+  .tooltip .tt-row span { color: var(--text); }
+
+  /* Sidebar */
+  .sidebar { border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 1.2rem 1.4rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .sidebar-header h3 { font-family: 'Bebas Neue', sans-serif; font-size: 1rem; letter-spacing: 0.1em; color: var(--muted); }
+  .sidebar-header .year-display { font-family: 'Bebas Neue', sans-serif; font-size: 2.8rem; color: var(--accent); line-height: 1; }
+
+  .top-list { flex: 1; overflow-y: auto; padding: 0.6rem 0; }
+  .top-list::-webkit-scrollbar { width: 4px; }
+  .top-list::-webkit-scrollbar-track { background: var(--bg); }
+  .top-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .list-item { padding: 0.45rem 1.4rem; display: grid; grid-template-columns: 1.2rem 1fr auto; align-items: center; gap: 0.6rem; border-bottom: 1px solid rgba(30,45,69,0.5); }
+  .list-item .rank { font-size: 0.65rem; color: var(--muted); }
+  .list-item .name { font-size: 0.78rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list-item .val { font-size: 0.73rem; color: var(--accent2); font-weight: 500; white-space: nowrap; }
+  .list-item .bar-wrap { grid-column: 2/4; height: 2px; background: var(--border); border-radius: 1px; margin-top: 2px; }
+  .list-item .bar-fill { height: 100%; background: var(--accent); border-radius: 1px; transition: width 0.4s ease; }
+
+  .controls { padding: 1.2rem 1.4rem; border-top: 1px solid var(--border); }
+  .slider-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.8rem; }
+  .play-btn { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.2s, transform 0.1s; }
+  .play-btn:hover { background: #2a7fd4; transform: scale(1.08); }
+  .play-btn svg { width: 12px; height: 12px; fill: white; }
+
+  input[type=range] { -webkit-appearance: none; flex: 1; height: 3px; background: var(--border); border-radius: 2px; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 2px solid var(--bg); }
+
+  .year-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); letter-spacing: 0.05em; }
+
+  .legend { padding: 0 3rem 0.8rem; display: flex; align-items: center; gap: 0.6rem; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .legend-gradient { width: 120px; height: 6px; border-radius: 3px; }
+  .source-note { padding: 0.4rem 3rem; font-size: 0.6rem; color: var(--muted); border-top: 1px solid var(--border); opacity: 0.7; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Turkish Citizens in <span>Europe</span></h1>
+    <p>First residence permits issued to Turkish citizens by EU/EEA countries, 2015–2024. Broken down by reason: employment, family, education, and other.</p>
+  </div>
+  <div class="stat-pills">
+    <div class="pill">
+      <div class="num">130K</div>
+      <div class="label">Peak (2023)</div>
+    </div>
+    <div class="pill">
+      <div class="num" id="stat-year">60K</div>
+      <div class="label">Selected Year</div>
+    </div>
+    <div class="pill">
+      <div class="num">🇩🇪 #1</div>
+      <div class="label">Top Destination</div>
+    </div>
+  </div>
+</header>
+
+<div class="filter-bar">
+  <span>Filter by reason:</span>
+  <button class="filter-btn active" data-filter="total">All Reasons</button>
+  <button class="filter-btn" data-filter="emp">💼 Employment</button>
+  <button class="filter-btn" data-filter="fam">👨‍👩‍👧 Family</button>
+  <button class="filter-btn" data-filter="edu">🎓 Education</button>
+  <button class="filter-btn" data-filter="oth">🌐 Other</button>
+</div>
+
+<div class="main">
+  <div class="map-section">
+    <svg id="map-svg"></svg>
+    <div class="tooltip" id="tooltip">
+      <div class="tt-country" id="tt-country">—</div>
+      <div class="tt-total" id="tt-total">0</div>
+      <div class="tt-breakdown" id="tt-breakdown"></div>
+    </div>
+  </div>
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h3>Top Destinations</h3>
+      <div class="year-display" id="sidebar-year">2015</div>
+    </div>
+    <div class="top-list" id="top-list"></div>
+    <div class="controls">
+      <div class="slider-row">
+        <button class="play-btn" id="play-btn">
+          <svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9"/></svg>
+        </button>
+        <input type="range" id="year-slider" min="2015" max="2024" value="2015" step="1">
+      </div>
+      <div class="year-labels">
+        <span>2015</span><span>2017</span><span>2019</span><span>2021</span><span>2024</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span>0</span>
+  <canvas class="legend-gradient" id="legend-canvas" width="120" height="6"></canvas>
+  <span>38K+ permits</span>
+  &nbsp;|&nbsp;
+  <span style="color:var(--turkey)">■</span> Turkey (origin)
+</div>
+<div class="source-note">Source: Eurostat — migr_resedu, migr_resfam, migr_resocc, migr_resoth (2026) · Visualization: Migration Analysis Project</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const outflowData = {
+  "Austria": { 2015:{emp:138,edu:302,fam:2052,oth:1469,total:3961}, 2016:{emp:160,edu:280,fam:2087,oth:1412,total:3939}, 2017:{emp:106,edu:232,fam:1586,oth:952,total:2876}, 2018:{emp:145,edu:198,fam:1468,oth:984,total:2795}, 2019:{emp:165,edu:162,fam:1360,oth:861,total:2548}, 2020:{emp:87,edu:155,fam:1218,oth:869,total:2329}, 2021:{emp:170,edu:230,fam:1516,oth:968,total:2884}, 2022:{emp:328,edu:280,fam:1887,oth:926,total:3421}, 2023:{emp:494,edu:337,fam:2163,oth:810,total:3804}, 2024:{emp:447,edu:362,fam:2222,oth:964,total:3995} },
+  "Belgium": { 2015:{emp:217,edu:269,fam:1227,oth:295,total:2008}, 2016:{emp:192,edu:283,fam:983,oth:265,total:1723}, 2017:{emp:295,edu:331,fam:952,oth:524,total:2102}, 2018:{emp:288,edu:297,fam:1027,oth:715,total:2327}, 2019:{emp:416,edu:396,fam:1149,oth:854,total:2815}, 2020:{emp:349,edu:223,fam:1050,oth:658,total:2280}, 2021:{emp:563,edu:396,fam:1446,oth:540,total:2945}, 2022:{emp:1137,edu:496,fam:1430,oth:930,total:3993}, 2023:{emp:1304,edu:507,fam:1667,oth:976,total:4454}, 2024:{emp:1272,edu:661,fam:2221,oth:1061,total:5215} },
+  "Bulgaria": { 2015:{emp:138,edu:240,fam:597,oth:1583,total:2558}, 2016:{emp:6,edu:287,fam:733,oth:1812,total:2838}, 2017:{emp:236,edu:341,fam:1039,oth:2444,total:4060}, 2018:{emp:306,edu:299,fam:1173,oth:2775,total:4553}, 2019:{emp:442,edu:208,fam:1243,oth:3054,total:4947}, 2020:{emp:455,edu:123,fam:966,oth:2383,total:3927}, 2021:{emp:733,edu:154,fam:1322,oth:1456,total:3665}, 2022:{emp:916,edu:198,fam:1890,oth:1201,total:4205}, 2023:{emp:1348,edu:195,fam:2132,oth:1956,total:5631}, 2024:{emp:1599,edu:251,fam:1765,oth:1378,total:4993} },
+  "Croatia": { 2015:{emp:22,edu:35,fam:12,oth:3,total:72}, 2016:{emp:37,edu:56,fam:24,oth:9,total:126}, 2017:{emp:51,edu:69,fam:13,oth:0,total:133}, 2018:{emp:65,edu:79,fam:19,oth:2,total:165}, 2019:{emp:203,edu:46,fam:21,oth:8,total:278}, 2020:{emp:361,edu:13,fam:14,oth:2,total:390}, 2021:{emp:925,edu:39,fam:26,oth:0,total:990}, 2022:{emp:2561,edu:28,fam:26,oth:5,total:2620}, 2023:{emp:3485,edu:54,fam:51,oth:1,total:3591}, 2024:{emp:2115,edu:48,fam:41,oth:6,total:2210} },
+  "Cyprus": { 2015:{emp:0,edu:0,fam:17,oth:16,total:33}, 2016:{emp:1,edu:0,fam:11,oth:22,total:34}, 2017:{emp:3,edu:0,fam:13,oth:15,total:31}, 2018:{emp:5,edu:1,fam:18,oth:55,total:79}, 2019:{emp:1,edu:1,fam:16,oth:18,total:36}, 2020:{emp:1,edu:0,fam:13,oth:16,total:30}, 2021:{emp:1,edu:0,fam:6,oth:41,total:48}, 2022:{emp:0,edu:1,fam:16,oth:39,total:56}, 2023:{emp:0,edu:1,fam:14,oth:32,total:47}, 2024:{emp:1,edu:0,fam:10,oth:35,total:46} },
+  "Czechia": { 2015:{emp:146,edu:959,fam:177,oth:82,total:1364}, 2016:{emp:226,edu:1251,fam:239,oth:89,total:1805}, 2017:{emp:266,edu:855,fam:238,oth:59,total:1418}, 2018:{emp:270,edu:928,fam:197,oth:36,total:1431}, 2019:{emp:563,edu:1074,fam:301,oth:49,total:1987}, 2020:{emp:249,edu:386,fam:159,oth:23,total:817}, 2021:{emp:166,edu:631,fam:169,oth:25,total:991}, 2022:{emp:665,edu:657,fam:235,oth:35,total:1592}, 2023:{emp:539,edu:622,fam:299,oth:30,total:1490}, 2024:{emp:498,edu:711,fam:286,oth:48,total:1543} },
+  "Denmark": { 2015:{emp:112,edu:130,fam:292,oth:2,total:536}, 2016:{emp:154,edu:126,fam:270,oth:6,total:556}, 2017:{emp:190,edu:178,fam:434,oth:6,total:808}, 2018:{emp:209,edu:189,fam:328,oth:12,total:738}, 2019:{emp:188,edu:137,fam:223,oth:17,total:565}, 2020:{emp:161,edu:86,fam:329,oth:22,total:598}, 2021:{emp:237,edu:114,fam:296,oth:27,total:674}, 2022:{emp:539,edu:156,fam:448,oth:43,total:1186}, 2023:{emp:479,edu:135,fam:418,oth:71,total:1103}, 2024:{emp:701,edu:190,fam:441,oth:81,total:1413} },
+  "Finland": { 2015:{emp:59,edu:158,fam:308,oth:39,total:564}, 2016:{emp:74,edu:163,fam:286,oth:9,total:532}, 2017:{emp:93,edu:213,fam:280,oth:48,total:634}, 2018:{emp:95,edu:178,fam:242,oth:89,total:604}, 2019:{emp:109,edu:150,fam:330,oth:448,total:1037}, 2020:{emp:112,edu:60,fam:344,oth:189,total:705}, 2021:{emp:203,edu:165,fam:410,oth:142,total:920}, 2022:{emp:446,edu:161,fam:480,oth:151,total:1238}, 2023:{emp:593,edu:172,fam:598,oth:87,total:1450}, 2024:{emp:487,edu:180,fam:632,oth:129,total:1428} },
+  "France": { 2015:{emp:519,edu:1017,fam:3366,oth:1063,total:5965}, 2016:{emp:557,edu:1019,fam:3292,oth:1132,total:6000}, 2017:{emp:634,edu:893,fam:3148,oth:1217,total:5892}, 2018:{emp:595,edu:915,fam:2864,oth:1342,total:5716}, 2019:{emp:726,edu:995,fam:2833,oth:1518,total:6072}, 2020:{emp:450,edu:797,fam:2180,oth:1321,total:4748}, 2021:{emp:664,edu:1282,fam:2724,oth:1856,total:6526}, 2022:{emp:1748,edu:1368,fam:2783,oth:1964,total:7863}, 2023:{emp:2509,edu:1387,fam:2499,oth:2691,total:9086}, 2024:{emp:1092,edu:1554,fam:2446,oth:3585,total:8677} },
+  "Germany": { 2015:{emp:555,edu:454,fam:15770,oth:1820,total:18599}, 2016:{emp:1283,edu:1020,fam:13490,oth:2250,total:18043}, 2017:{emp:1805,edu:1478,fam:12344,oth:3722,total:19349}, 2018:{emp:2427,edu:1979,fam:14296,oth:4556,total:23258}, 2019:{emp:3255,edu:2133,fam:13969,oth:6972,total:26329}, 2020:{emp:2376,edu:1744,fam:12111,oth:7289,total:23520}, 2021:{emp:3633,edu:2790,fam:18502,oth:6927,total:31852}, 2022:{emp:5771,edu:4398,fam:19303,oth:7604,total:37076}, 2023:{emp:6424,edu:4909,fam:22195,oth:9142,total:42670}, 2024:{emp:5686,edu:4908,fam:18770,oth:8665,total:38029} },
+  "Greece": { 2015:{emp:52,edu:30,fam:96,oth:35,total:213}, 2016:{emp:39,edu:50,fam:164,oth:80,total:333}, 2017:{emp:131,edu:50,fam:429,oth:227,total:837}, 2018:{emp:147,edu:40,fam:459,oth:195,total:841}, 2019:{emp:131,edu:44,fam:351,oth:145,total:671}, 2020:{emp:43,edu:21,fam:101,oth:45,total:210}, 2021:{emp:100,edu:15,fam:262,oth:578,total:955}, 2022:{emp:213,edu:18,fam:740,oth:907,total:1878}, 2023:{emp:153,edu:18,fam:855,oth:617,total:1643}, 2024:{emp:123,edu:22,fam:2112,oth:1143,total:3400} },
+  "Hungary": { 2015:{emp:57,edu:709,fam:116,oth:106,total:988}, 2016:{emp:89,edu:901,fam:167,oth:123,total:1280}, 2017:{emp:249,edu:1001,fam:147,oth:136,total:1533}, 2018:{emp:413,edu:898,fam:230,oth:190,total:1731}, 2019:{emp:798,edu:748,fam:125,oth:177,total:1848}, 2020:{emp:798,edu:549,fam:113,oth:297,total:1757}, 2021:{emp:756,edu:676,fam:144,oth:244,total:1820}, 2022:{emp:1373,edu:571,fam:176,oth:171,total:2291}, 2023:{emp:1762,edu:794,fam:391,oth:181,total:3128}, 2024:{emp:1891,edu:1130,fam:313,oth:296,total:3630} },
+  "Ireland": { 2015:{emp:77,edu:217,fam:39,oth:30,total:363}, 2016:{emp:91,edu:275,fam:48,oth:52,total:466}, 2017:{emp:133,edu:428,fam:37,oth:80,total:678}, 2018:{emp:153,edu:631,fam:20,oth:68,total:872}, 2019:{emp:168,edu:1083,fam:24,oth:79,total:1354}, 2020:{emp:97,edu:499,fam:21,oth:80,total:697}, 2021:{emp:105,edu:624,fam:21,oth:79,total:829}, 2022:{emp:376,edu:2171,fam:31,oth:154,total:2732}, 2023:{emp:330,edu:1384,fam:52,oth:191,total:1957}, 2024:{emp:177,edu:636,fam:34,oth:131,total:978} },
+  "Italy": { 2015:{emp:139,edu:1121,fam:511,oth:142,total:1913}, 2016:{emp:88,edu:732,fam:606,oth:268,total:1694}, 2017:{emp:121,edu:978,fam:656,oth:228,total:1983}, 2018:{emp:159,edu:1170,fam:609,oth:391,total:2329}, 2019:{emp:171,edu:933,fam:427,oth:1115,total:2646}, 2020:{emp:92,edu:318,fam:334,oth:586,total:1330}, 2021:{emp:146,edu:1302,fam:638,oth:243,total:2329}, 2022:{emp:219,edu:1863,fam:666,oth:881,total:3629}, 2023:{emp:242,edu:2079,fam:811,oth:1969,total:5101}, 2024:{emp:195,edu:1708,fam:696,oth:1332,total:3931} },
+  "Lithuania": { 2015:{emp:7,edu:33,fam:17,oth:1,total:58}, 2016:{emp:18,edu:23,fam:23,oth:2,total:66}, 2017:{emp:15,edu:41,fam:27,oth:7,total:90}, 2018:{emp:24,edu:47,fam:29,oth:15,total:115}, 2019:{emp:35,edu:60,fam:36,oth:18,total:149}, 2020:{emp:29,edu:34,fam:31,oth:9,total:103}, 2021:{emp:66,edu:56,fam:40,oth:7,total:169}, 2022:{emp:129,edu:63,fam:41,oth:53,total:286}, 2023:{emp:1044,edu:200,fam:69,oth:9,total:1322}, 2024:{emp:1231,edu:193,fam:82,oth:6,total:1512} },
+  "Luxembourg": { 2015:{emp:40,edu:7,fam:42,oth:11,total:100}, 2016:{emp:33,edu:3,fam:49,oth:27,total:112}, 2017:{emp:106,edu:10,fam:86,oth:13,total:215}, 2018:{emp:111,edu:11,fam:95,oth:26,total:243}, 2019:{emp:104,edu:15,fam:107,oth:25,total:251}, 2020:{emp:49,edu:10,fam:70,oth:35,total:164}, 2021:{emp:71,edu:8,fam:79,oth:40,total:198}, 2022:{emp:136,edu:15,fam:152,oth:56,total:359}, 2023:{emp:101,edu:23,fam:116,oth:25,total:265}, 2024:{emp:111,edu:19,fam:158,oth:28,total:316} },
+  "Netherlands": { 2015:{emp:482,edu:697,fam:2164,oth:428,total:3771}, 2016:{emp:649,edu:802,fam:2235,oth:340,total:4026}, 2017:{emp:991,edu:884,fam:2759,oth:625,total:5259}, 2018:{emp:1234,edu:942,fam:2847,oth:640,total:5663}, 2019:{emp:1311,edu:1077,fam:3191,oth:1310,total:6889}, 2020:{emp:868,edu:669,fam:2637,oth:2000,total:6174}, 2021:{emp:1749,edu:1281,fam:3008,oth:2298,total:8336}, 2022:{emp:3260,edu:1429,fam:4183,oth:3654,total:12526}, 2023:{emp:2112,edu:1610,fam:3630,oth:2896,total:10248}, 2024:{emp:1730,edu:1792,fam:3351,oth:2250,total:9123} },
+  "Poland": { 2015:{emp:370,edu:3781,fam:6,oth:69,total:4226}, 2016:{emp:597,edu:4340,fam:99,oth:97,total:5133}, 2017:{emp:837,edu:4992,fam:293,oth:187,total:6309}, 2018:{emp:1170,edu:5243,fam:364,oth:332,total:7109}, 2019:{emp:1597,edu:2186,fam:405,oth:1610,total:5798}, 2020:{emp:1302,edu:1093,fam:257,oth:2055,total:4707}, 2021:{emp:3030,edu:3009,fam:180,oth:3782,total:10001}, 2022:{emp:11774,edu:3945,fam:281,oth:3912,total:19912}, 2023:{emp:9901,edu:4007,fam:321,oth:3614,total:17843}, 2024:{emp:4011,edu:1831,fam:394,oth:3437,total:9673} },
+  "Portugal": { 2015:{emp:13,edu:11,fam:17,oth:337,total:378}, 2016:{emp:27,edu:7,fam:27,oth:10,total:71}, 2017:{emp:83,edu:14,fam:92,oth:5,total:194}, 2018:{emp:218,edu:24,fam:311,oth:10,total:563}, 2019:{emp:145,edu:18,fam:220,oth:10,total:393}, 2020:{emp:104,edu:19,fam:183,oth:1,total:307}, 2021:{emp:72,edu:32,fam:100,oth:11,total:215}, 2022:{emp:158,edu:19,fam:144,oth:28,total:349}, 2023:{emp:225,edu:54,fam:190,oth:72,total:541}, 2024:{emp:115,edu:53,fam:295,oth:150,total:613} },
+  "Romania": { 2015:{emp:279,edu:330,fam:447,oth:117,total:1173}, 2016:{emp:299,edu:393,fam:447,oth:74,total:1213}, 2017:{emp:427,edu:474,fam:447,oth:118,total:1466}, 2018:{emp:648,edu:447,fam:469,oth:126,total:1690}, 2019:{emp:1804,edu:542,fam:472,oth:137,total:2955}, 2020:{emp:1943,edu:103,fam:331,oth:93,total:2470}, 2021:{emp:3161,edu:355,fam:534,oth:87,total:4137}, 2022:{emp:3832,edu:248,fam:529,oth:109,total:4718}, 2023:{emp:2948,edu:369,fam:765,oth:84,total:4166}, 2024:{emp:2213,edu:525,fam:884,oth:88,total:3710} },
+  "Spain": { 2015:{emp:117,edu:503,fam:192,oth:43,total:855}, 2016:{emp:132,edu:536,fam:212,oth:50,total:930}, 2017:{emp:318,edu:640,fam:389,oth:136,total:1483}, 2018:{emp:147,edu:579,fam:341,oth:141,total:1208}, 2019:{emp:171,edu:527,fam:351,oth:96,total:1145}, 2020:{emp:176,edu:251,fam:273,oth:185,total:885}, 2021:{emp:158,edu:570,fam:290,oth:174,total:1192}, 2022:{emp:341,edu:498,fam:480,oth:216,total:1535}, 2023:{emp:452,edu:579,fam:654,oth:174,total:1859}, 2024:{emp:472,edu:660,fam:755,oth:335,total:2222} },
+  "Sweden": { 2015:{emp:420,edu:265,fam:1054,oth:202,total:1941}, 2016:{emp:369,edu:270,fam:1097,oth:207,total:1943}, 2017:{emp:618,edu:320,fam:1207,oth:208,total:2353}, 2018:{emp:761,edu:292,fam:1226,oth:883,total:3162}, 2019:{emp:903,edu:239,fam:1099,oth:489,total:2730}, 2020:{emp:482,edu:167,fam:1062,oth:588,total:2299}, 2021:{emp:756,edu:288,fam:1167,oth:396,total:2607}, 2022:{emp:928,edu:251,fam:1267,oth:468,total:2914}, 2023:{emp:745,edu:281,fam:1211,oth:282,total:2519}, 2024:{emp:542,edu:317,fam:1183,oth:239,total:2281} },
+  "Switzerland": { 2015:{emp:142,edu:204,fam:890,oth:86,total:1322}, 2016:{emp:192,edu:213,fam:867,oth:94,total:1366}, 2017:{emp:192,edu:264,fam:893,oth:69,total:1418}, 2018:{emp:225,edu:266,fam:910,oth:84,total:1485}, 2019:{emp:0,edu:271,fam:873,oth:86,total:1230}, 2020:{emp:195,edu:244,fam:729,oth:0,total:1168}, 2021:{emp:205,edu:285,fam:781,oth:127,total:1398}, 2022:{emp:333,edu:375,fam:1053,oth:151,total:1912}, 2023:{emp:383,edu:380,fam:1037,oth:150,total:1950}, 2024:{emp:285,edu:380,fam:980,oth:140,total:1785} },
+};
+
+// Name map: TopoJSON country name → our data key
+const nameMap = {
+  "Austria":"Austria","Belgium":"Belgium","Bulgaria":"Bulgaria","Croatia":"Croatia",
+  "Cyprus":"Cyprus","Czech Republic":"Czechia","Denmark":"Denmark","Finland":"Finland",
+  "France":"France","Germany":"Germany","Greece":"Greece","Hungary":"Hungary",
+  "Ireland":"Ireland","Italy":"Italy","Lithuania":"Lithuania","Luxembourg":"Luxembourg",
+  "Netherlands":"Netherlands","Poland":"Poland","Portugal":"Portugal",
+  "Romania":"Romania","Spain":"Spain","Sweden":"Sweden","Switzerland":"Switzerland",
+  "Turkey":"__turkey__"
+};
+
+const YEARS = d3.range(2015, 2025);
+let currentYear = 2015;
+let currentFilter = "total";
+let playing = false, playInterval = null;
+
+function getVal(name, year, filter) {
+  const d = outflowData[name]?.[year];
+  if (!d) return 0;
+  return d[filter] || 0;
+}
+
+function fmt(n) {
+  if (n >= 1000) return (n/1000).toFixed(1) + "K";
+  return n.toString();
+}
+
+// Color scales per filter
+const colorScales = {
+  total: d3.scaleSequentialLog().domain([1, 43000]).clamp(true).interpolator(d3.interpolateRgbBasis(["#0d2137","#1a4a8e","#3b9eff","#7dd3fc","#ffffff"])),
+  emp:   d3.scaleSequentialLog().domain([1, 12000]).clamp(true).interpolator(d3.interpolateRgbBasis(["#0d1f2d","#1a4a3e","#10b981","#6ee7b7"])),
+  fam:   d3.scaleSequentialLog().domain([1, 22000]).clamp(true).interpolator(d3.interpolateRgbBasis(["#1a0d2d","#4a1a6e","#a855f7","#e9d5ff"])),
+  edu:   d3.scaleSequentialLog().domain([1, 6000]).clamp(true).interpolator(d3.interpolateRgbBasis(["#1a1a0d","#4a4a1a","#eab308","#fef08a"])),
+  oth:   d3.scaleSequentialLog().domain([1, 10000]).clamp(true).interpolator(d3.interpolateRgbBasis(["#1a0d0d","#6e1a1a","#ef4444","#fca5a5"])),
+};
+
+const accentColors = { total:"#3b9eff", emp:"#10b981", fam:"#a855f7", edu:"#eab308", oth:"#ef4444" };
+
+// ── MAP ───────────────────────────────────────────────────────────────────────
+const svg = d3.select("#map-svg");
+const mapSection = document.querySelector(".map-section");
+let width, height, projection, path;
+
+function initMap() {
+  width = mapSection.clientWidth;
+  height = mapSection.clientHeight;
+  svg.attr("width", width).attr("height", height);
+
+  // Europe-focused projection
+  projection = d3.geoNaturalEarth1()
+    .scale(width / 2.2)
+    .center([18, 52])
+    .translate([width / 2, height / 2]);
+
+  path = d3.geoPath().projection(projection);
+
+  fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+    .then(r => r.json())
+    .then(world => {
+      const geo = topojson.feature(world, world.objects.countries);
+      drawMap(geo);
+    });
+}
+
+const idToName = {
+  "040":"Austria","056":"Belgium","100":"Bulgaria","191":"Croatia","196":"Cyprus",
+  "203":"Czech Republic","208":"Denmark","246":"Finland","250":"France","276":"Germany",
+  "300":"Greece","348":"Hungary","372":"Ireland","380":"Italy","440":"Lithuania",
+  "442":"Luxembourg","528":"Netherlands","616":"Poland","620":"Portugal","642":"Romania",
+  "703":"Slovakia","705":"Slovenia","724":"Spain","752":"Sweden","756":"Switzerland",
+  "792":"Turkey","826":"United Kingdom","804":"Ukraine","643":"Russia","616":"Poland",
+  "528":"Netherlands","040":"Austria",
+};
+
+function drawMap(geo) {
+  svg.selectAll("*").remove();
+  const g = svg.append("g");
+
+  g.selectAll(".country-path")
+    .data(geo.features)
+    .join("path")
+    .attr("class", d => {
+      const name = idToName[String(d.id).padStart(3,"0")] || "";
+      return "country-path" + (name === "Turkey" ? " turkey-dot" : "");
+    })
+    .attr("d", path)
+    .attr("fill", d => getFill(d))
+    .on("mousemove", (event, d) => {
+      const name = idToName[String(d.id).padStart(3,"0")] || "";
+      const dataKey = nameMap[name];
+      const tt = document.getElementById("tooltip");
+      const rect = mapSection.getBoundingClientRect();
+      let x = event.clientX - rect.left + 12;
+      let y = event.clientY - rect.top - 10;
+      if (x + 220 > width) x -= 230;
+      tt.style.left = x + "px";
+      tt.style.top = y + "px";
+      tt.classList.add("visible");
+
+      if (name === "Turkey") {
+        document.getElementById("tt-country").textContent = "🇹🇷 Turkey (Origin)";
+        document.getElementById("tt-total").textContent = "Source of all permits";
+        document.getElementById("tt-breakdown").innerHTML = "";
+      } else if (dataKey && outflowData[dataKey]) {
+        const d2 = outflowData[dataKey][currentYear] || {};
+        document.getElementById("tt-country").textContent = name;
+        document.getElementById("tt-total").textContent = fmt(d2.total||0) + " permits";
+        document.getElementById("tt-breakdown").innerHTML = `
+          <div class="tt-row">💼 Employment <span>${fmt(d2.emp||0)}</span></div>
+          <div class="tt-row">👨‍👩‍👧 Family <span>${fmt(d2.fam||0)}</span></div>
+          <div class="tt-row">🎓 Education <span>${fmt(d2.edu||0)}</span></div>
+          <div class="tt-row">🌐 Other <span>${fmt(d2.oth||0)}</span></div>
+        `;
+      } else {
+        document.getElementById("tt-country").textContent = name || "Unknown";
+        document.getElementById("tt-total").textContent = "No data";
+        document.getElementById("tt-breakdown").innerHTML = "";
+      }
+    })
+    .on("mouseleave", () => document.getElementById("tooltip").classList.remove("visible"));
+}
+
+function getFill(d) {
+  const name = idToName[String(d.id).padStart(3,"0")] || "";
+  if (name === "Turkey") return "var(--turkey)";
+  const dataKey = nameMap[name];
+  if (!dataKey || dataKey === "__turkey__") return "#132030";
+  const val = getVal(dataKey, currentYear, currentFilter);
+  return val > 0 ? colorScales[currentFilter](val) : "#132030";
+}
+
+function updateMap() {
+  document.getElementById("sidebar-year").textContent = currentYear;
+  document.getElementById("year-slider").value = currentYear;
+
+  // Update accent color
+  const ac = accentColors[currentFilter];
+  document.documentElement.style.setProperty("--accent", ac);
+
+  svg.selectAll(".country-path:not(.turkey-dot)")
+    .attr("fill", d => getFill(d));
+
+  updateSidebar();
+  updateStatPill();
+}
+
+function updateSidebar() {
+  const entries = Object.entries(outflowData)
+    .map(([name, years]) => ({ name, val: (years[currentYear]?.[currentFilter]) || 0 }))
+    .filter(d => d.val > 0)
+    .sort((a, b) => b.val - a.val)
+    .slice(0, 12);
+
+  const maxVal = entries[0]?.val || 1;
+  const list = document.getElementById("top-list");
+  list.innerHTML = entries.map((d, i) => `
+    <div class="list-item">
+      <span class="rank">${i+1}</span>
+      <span class="name">${d.name}</span>
+      <span class="val">${fmt(d.val)}</span>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${(d.val/maxVal*100).toFixed(1)}%"></div></div>
+    </div>
+  `).join("");
+}
+
+function updateStatPill() {
+  const total = Object.values(outflowData)
+    .reduce((sum, y) => sum + ((y[currentYear]?.[currentFilter]) || 0), 0);
+  document.getElementById("stat-year").textContent = fmt(total);
+}
+
+// ── CONTROLS ──────────────────────────────────────────────────────────────────
+document.getElementById("year-slider").addEventListener("input", e => {
+  currentYear = +e.target.value;
+  updateMap();
+});
+
+document.querySelectorAll(".filter-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentFilter = btn.dataset.filter;
+    updateMap();
+  });
+});
+
+const playBtn = document.getElementById("play-btn");
+const playIcon = `<svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9"/></svg>`;
+const pauseIcon = `<svg viewBox="0 0 10 10"><rect x="2" y="1" width="2.5" height="8"/><rect x="5.5" y="1" width="2.5" height="8"/></svg>`;
+
+playBtn.addEventListener("click", () => {
+  if (playing) {
+    clearInterval(playInterval);
+    playing = false;
+    playBtn.innerHTML = playIcon;
+  } else {
+    if (currentYear >= 2024) currentYear = 2015;
+    playing = true;
+    playBtn.innerHTML = pauseIcon;
+    playInterval = setInterval(() => {
+      const next = currentYear + 1;
+      if (next > 2024) {
+        clearInterval(playInterval);
+        playing = false;
+        playBtn.innerHTML = playIcon;
+      } else {
+        currentYear = next;
+        updateMap();
+      }
+    }, 900);
+  }
+});
+
+window.addEventListener("resize", () => { initMap(); updateMap(); });
+initMap();
+setTimeout(() => updateMap(), 800);
+</script>
+</body>
+</html>
