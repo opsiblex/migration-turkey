@@ -677,8 +677,7 @@ playBtn.addEventListener("click", () => {
 window.addEventListener("resize", () => { initMap(); updateMap(currentYear); });
 initMap();
 updateMap(2011);
-</script>
-  <section style="max-width: 1100px; margin: 40px auto 60px auto; padding: 0 20px;">
+<section style="max-width: 1100px; margin: 40px auto 60px auto; padding: 0 20px;">
   <h2 style="font-size: 1.4rem; margin-bottom: 18px;">Key observations: Inflows to Turkey</h2>
 
   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px;">
@@ -713,55 +712,48 @@ updateMap(2011);
 
   </div>
 </section>
-  <section style="max-width: 1100px; margin: 0 auto; padding: 60px 20px 40px 20px;">
-  <h2 style="font-size: 1.5rem; margin-bottom: 12px;">Additional insights</h2>
-  <p style="font-size: 1rem; line-height: 1.7; margin-bottom: 24px; color: #b9c2d0;">
-    These charts complement the map by showing long-term developments in total refugee numbers and the changing weight of the main origin countries over time.
+
+<section style="max-width: 1100px; margin: 50px auto 60px auto; padding: 0 20px;">
+  <h2 style="font-size: 1.8rem; margin-bottom: 12px;">Additional insights</h2>
+  <p style="font-size: 1rem; line-height: 1.7; margin-bottom: 22px; color: #cfc7bc;">
+    These charts complement the map by showing the long-term development of refugee numbers and the peak levels reached by selected origin countries.
   </p>
 
-  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-    
-    <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px;">
-      <h3 style="margin-bottom: 8px; font-size: 1.05rem;">Total refugees in Turkey over time</h3>
-      <p style="font-size: 0.95rem; line-height: 1.6; color: #b9c2d0; margin-bottom: 16px;">
-        The total rises sharply after 2012, peaks in the early 2020s, and then begins to decline.
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+
+    <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 20px;">
+      <h3 style="margin-bottom: 10px; font-size: 1.1rem;">Peak refugee counts by origin country</h3>
+      <p style="line-height: 1.7; margin: 0 0 16px 0; color: #ddd4c7;">
+        Selected countries are compared by the highest refugee count they reached in Turkey and the year in which that maximum occurred.
       </p>
-      <svg id="total-refugees-chart" width="100%" height="320"></svg>
+      <div id="peak-country-chart"></div>
     </div>
 
-<div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 20px;">
-  <h3 style="margin-bottom: 10px; font-size: 1.05rem;">Peak refugee counts by origin country</h3>
-  <p style="line-height: 1.7; margin: 0 0 16px 0;">
-    This chart compares the peak refugee count reached by selected origin countries in Turkey and shows the year in which each country reached its maximum.
-  </p>
+    <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 20px;">
+      <h3 style="margin-bottom: 10px; font-size: 1.1rem;">Total refugees in Turkey over time</h3>
+      <p style="line-height: 1.7; margin: 0 0 16px 0; color: #ddd4c7;">
+        This chart shows how total refugee numbers in Turkey changed over time and highlights the peak year.
+      </p>
+      <div id="yearly-trend-chart"></div>
+    </div>
 
-  <svg id="top-origin-chart" style="width:100%; height:340px;"></svg>
-</div>
-
-    
   </div>
 
-  <div style="margin-top: 22px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 18px 20px;">
-    <p style="font-size: 0.95rem; line-height: 1.7; margin: 0; color: #d7dce5;">
-      <strong>Scope note:</strong> This project focuses on refugee-related inflows and does not cover all residence permit holders or all forms of legal migration to Turkey.
-    </p>
+  <div style="margin-top: 18px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 16px 18px; line-height: 1.7; color: #ddd4c7;">
+    <strong>Scope note:</strong> This project focuses on refugee-related inflows and does not include all residence permit holders or all forms of legal migration to Turkey.
   </div>
 </section>
-  <script>
-function drawTopOriginsChart() {
-  const svg = d3.select("#top-origin-chart");
-  svg.selectAll("*").remove();
 
-  const container = document.getElementById("top-origin-chart");
+<script>
+function shortFormat(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(2) + "M";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+  return n.toString();
+}
+
+function buildPeakCountryChart() {
+  const container = document.getElementById("peak-country-chart");
   if (!container) return;
-
-  const width = container.clientWidth || 420;
-  const height = 340;
-  const margin = { top: 20, right: 120, bottom: 30, left: 140 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
-
-  svg.attr("viewBox", `0 0 ${width} ${height}`);
 
   const selectedCountries = [
     { name: "Syria", flag: "🇸🇾", color: "#e85d26" },
@@ -784,86 +776,90 @@ function drawTopOriginsChart() {
     });
 
     return {
-      country: c.name,
+      name: c.name,
       flag: c.flag,
-      label: `${c.flag} ${c.name}`,
+      color: c.color,
       peakValue,
-      peakYear,
-      color: c.color
+      peakYear
     };
   }).sort((a, b) => b.peakValue - a.peakValue);
 
-  const x = d3.scaleLinear()
-    .domain([0, d3.max(peakData, d => d.peakValue)]).nice()
-    .range([margin.left, margin.left + innerWidth]);
+  const maxValue = Math.max(...peakData.map(d => d.peakValue), 1);
 
-  const y = d3.scaleBand()
-    .domain(peakData.map(d => d.label))
-    .range([margin.top, margin.top + innerHeight])
-    .padding(0.22);
+  container.innerHTML = peakData.map(d => `
+    <div style="margin-bottom: 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:6px;">
+        <div style="font-size:14px; color:#f2eadf; font-weight:500;">
+          ${d.flag} ${d.name}
+        </div>
+        <div style="font-size:12px; color:#ddd4c7; white-space:nowrap;">
+          Peak ${d.peakYear} · ${shortFormat(d.peakValue)}
+        </div>
+      </div>
 
-  function shortFormat(n) {
-    if (n >= 1000000) return (n / 1000000).toFixed(2) + "M";
-    if (n >= 1000) return (n / 1000).toFixed(1) + "K";
-    return n.toString();
-  }
-
-  svg.append("g")
-    .attr("transform", `translate(0,${margin.top + innerHeight})`)
-    .call(
-      d3.axisBottom(x)
-        .ticks(5)
-        .tickFormat(d => {
-          if (d >= 1000000) return (d / 1000000) + "M";
-          if (d >= 1000) return (d / 1000) + "K";
-          return d;
-        })
-    )
-    .call(g => g.selectAll("text").attr("fill", "#e8e0d5").style("font-size", "10px"))
-    .call(g => g.selectAll("line").attr("stroke", "#42506b"))
-    .call(g => g.select("path").attr("stroke", "#42506b"));
-
-  svg.append("g")
-    .attr("transform", `translate(${margin.left},0)`)
-    .call(d3.axisLeft(y))
-    .call(g => g.selectAll("text").attr("fill", "#e8e0d5").style("font-size", "12px"))
-    .call(g => g.selectAll("line").remove())
-    .call(g => g.select("path").remove());
-
-  svg.selectAll(".bar")
-    .data(peakData)
-    .enter()
-    .append("rect")
-    .attr("class", "bar")
-    .attr("x", margin.left)
-    .attr("y", d => y(d.label))
-    .attr("width", d => x(d.peakValue) - margin.left)
-    .attr("height", y.bandwidth())
-    .attr("rx", 6)
-    .attr("fill", d => d.color);
-
-  svg.selectAll(".value-label")
-    .data(peakData)
-    .enter()
-    .append("text")
-    .attr("class", "value-label")
-    .attr("x", d => x(d.peakValue) + 8)
-    .attr("y", d => y(d.label) + y.bandwidth() / 2)
-    .attr("dominant-baseline", "middle")
-    .attr("fill", "#e8e0d5")
-    .style("font-size", "11px")
-    .text(d => `${shortFormat(d.peakValue)} (${d.peakYear})`);
+      <div style="width:100%; height:14px; background:#1f2a3d; border-radius:999px; overflow:hidden;">
+        <div style="
+          width:${(d.peakValue / maxValue) * 100}%;
+          height:100%;
+          background:${d.color};
+          border-radius:999px;
+        "></div>
+      </div>
+    </div>
+  `).join("");
 }
 
-  drawTotalRefugeesChart();
-  drawTopOriginsChart();
+function buildYearlyTrendChart() {
+  const container = document.getElementById("yearly-trend-chart");
+  if (!container) return;
 
-  window.addEventListener("resize", () => {
-    drawTotalRefugeesChart();
-    drawTopOriginsChart();
+  const totals = YEARS.map(year => {
+    let total = 0;
+
+    rawData.forEach(row => {
+      const index = YEARS.indexOf(year) + 1;
+      total += row[index] || 0;
+    });
+
+    return { year, total };
   });
+
+  const maxValue = Math.max(...totals.map(d => d.total), 1);
+  const peak = totals.reduce((a, b) => b.total > a.total ? b : a);
+
+  container.innerHTML = totals.map(d => `
+    <div style="margin-bottom: 12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:5px;">
+        <div style="font-size:13px; color:#f2eadf; font-weight:${d.year === peak.year ? '700' : '500'};">
+          ${d.year}${d.year === peak.year ? ' ⭐' : ''}
+        </div>
+        <div style="font-size:12px; color:#ddd4c7; white-space:nowrap;">
+          ${shortFormat(d.total)}
+        </div>
+      </div>
+
+      <div style="width:100%; height:12px; background:#1f2a3d; border-radius:999px; overflow:hidden;">
+        <div style="
+          width:${(d.total / maxValue) * 100}%;
+          height:100%;
+          background:${d.year === peak.year ? '#ff7b2c' : '#5c7cfa'};
+          border-radius:999px;
+        "></div>
+      </div>
+    </div>
+  `).join("");
+}
+
+buildPeakCountryChart();
+buildYearlyTrendChart();
+
+window.addEventListener("resize", () => {
+  buildPeakCountryChart();
+  buildYearlyTrendChart();
+});
 </script>
-  <section style="padding: 60px 20px; background: #ffffff;">
+
+<section style="padding: 60px 20px; background: #0a0e1a;">
   <h2 style="margin-bottom: 10px;">Outflow from Turkey</h2>
   <p style="margin-bottom: 20px;">Scroll down to explore outflows from Turkey.</p>
 
@@ -875,5 +871,3 @@ function drawTopOriginsChart() {
     loading="lazy">
   </iframe>
 </section>
-</body>
-</html>
